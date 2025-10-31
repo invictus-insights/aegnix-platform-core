@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+aegnix_core/__init__.py
+aegnix_core/constants.py
+aegnix_core/crypto.py
+aegnix_core/envelope.py
+aegnix_core/storage.py
+aegnix_core/utils.py
+aegnix_core.egg-info/PKG-INFO
+aegnix_core.egg-info/SOURCES.txt
+aegnix_core.egg-info/dependency_links.txt
+aegnix_core.egg-info/requires.txt
+aegnix_core.egg-info/top_level.txt
+tests/test_core.py

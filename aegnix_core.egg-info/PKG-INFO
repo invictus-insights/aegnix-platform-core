@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: aegnix-core
+Version: 0.1.0
+Summary: Core primitives for the AEGNIX Swarm Framework
+Author: Invictus Insights R&D
+License-Expression: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: cryptography>=42.0.0
