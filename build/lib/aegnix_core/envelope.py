@@ -12,9 +12,12 @@ Key features:
 
 from __future__ import annotations
 from dataclasses import dataclass, asdict, field
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from .constants import SCHEMA_VERSION, DEFAULT_SENSITIVITY
 from .utils import canonical_json, new_id, now_ts
+import json
+
 
 @dataclass
 class Envelope:
@@ -42,3 +45,31 @@ class Envelope:
     def to_signing_bytes(self) -> bytes:
         # We sign the envelope with sig=None (canonical header+payload)
         return canonical_json(self.to_dict(include_sig=False))
+
+    def to_bytes(self) -> bytes:
+        """Convert the envelope (without signature) to bytes for signing."""
+        data = asdict(self).copy()
+        data["sig"] = None  # don't sign the signature itself
+        return json.dumps(data, sort_keys=True).encode("utf-8")
+
+    def to_json(self) -> str:
+        """Full JSON serialization (including signature)."""
+        return json.dumps(asdict(self), sort_keys=True)
+
+    @staticmethod
+    def make(producer, subject, payload, labels, key_id, sensitivity="UNCLASS"):
+        """Factory to create a properly structured envelope."""
+        return Envelope(
+            schema_ver="1.0",
+            msg_id=new_id(),
+            corr_id=None,
+            ts=datetime.utcnow().isoformat() + "Z",
+            producer=producer,
+            subject=subject,
+            key_id=key_id,
+            sig=None,
+            sensitivity=sensitivity,
+            labels=labels,
+            payload_type="json",
+            payload=payload,
+        )

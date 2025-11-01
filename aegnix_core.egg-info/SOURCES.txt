@@ -4,6 +4,7 @@ aegnix_core/__init__.py
 aegnix_core/constants.py
 aegnix_core/crypto.py
 aegnix_core/envelope.py
+aegnix_core/logger.py
 aegnix_core/storage.py
 aegnix_core/utils.py
 aegnix_core.egg-info/PKG-INFO
