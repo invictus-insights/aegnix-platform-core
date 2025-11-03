@@ -73,3 +73,27 @@ class Envelope:
             payload_type="json",
             payload=payload,
         )
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Envelope":
+        """Reconstruct Envelope from dict (inverse of to_dict).
+
+        This is used by the ABI /emit endpoint to rebuild an envelope
+        from a JSON payload before signature verification.
+        """
+        env = cls(
+            schema_ver=data.get("schema_ver", "1.0"),
+            msg_id=data.get("msg_id"),
+            corr_id=data.get("corr_id"),
+            ts=data.get("ts", now_ts()),
+            producer=data.get("producer", ""),
+            subject=data.get("subject", ""),
+            key_id=data.get("key_id", ""),
+            sig=data.get("sig"),
+            sensitivity=data.get("sensitivity", DEFAULT_SENSITIVITY),
+            labels=data.get("labels", []),
+            payload_type=data.get("payload_type", "json"),
+            payload=data.get("payload"),
+            aad=data.get("aad"),
+        )
+        return env
