@@ -34,11 +34,17 @@ class StorageProvider:
     def seen_msg(self, msg_id: str) -> bool: ...
     def mark_msg(self, msg_id: str) -> None: ...
 
-class SQLiteStorage(StorageProvider):
-    def __init__(self, path: str = "/var/lib/abi/abi_state.db") -> None:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+class SQLiteStorage:
+    def __init__(self, path="db/abi_state.db"):
+        # If no directory, default to current working directory
+        dir_path = os.path.dirname(path) or "."
+        os.makedirs(dir_path, exist_ok=True)
+        # self.db = sqlite3.connect(path)
         self.db = sqlite3.connect(path, check_same_thread=False)
+
         self._init()
+
 
     def _init(self) -> None:
         c = self.db.cursor()

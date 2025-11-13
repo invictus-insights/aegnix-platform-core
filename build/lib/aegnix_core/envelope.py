@@ -42,9 +42,37 @@ class Envelope:
             d["sig"] = None
         return d
 
+    # def to_signing_bytes(self) -> bytes:
+    #     """
+    #     Deterministic byte sequence used for signing.
+    #
+    #     Includes only immutable content fields:
+    #     producer, subject, payload, labels, and sensitivity.
+    #     Excludes msg_id, ts, key_id, sig, schema_ver, and other metadata.
+    #     """
+    #     payload = {
+    #         "producer": self.producer,
+    #         "subject": self.subject,
+    #         "payload": self.payload,
+    #         "labels": self.labels,
+    #         "sensitivity": self.sensitivity,
+    #     }
+    #     return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+
     def to_signing_bytes(self) -> bytes:
-        # We sign the envelope with sig=None (canonical header+payload)
-        return canonical_json(self.to_dict(include_sig=False))
+        import json
+        body = {
+            "producer": self.producer,
+            "subject": self.subject,
+            "payload": self.payload,
+            "labels": self.labels,
+        }
+        # enforce deterministic serialization
+        return json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+    # def to_signing_bytes(self) -> bytes:
+    #     # We sign the envelope with sig=None (canonical header+payload)
+    #     return canonical_json(self.to_dict(include_sig=False))
 
     def to_bytes(self) -> bytes:
         """Convert the envelope (without signature) to bytes for signing."""
@@ -73,3 +101,27 @@ class Envelope:
             payload_type="json",
             payload=payload,
         )
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Envelope":
+        """Reconstruct Envelope from dict (inverse of to_dict).
+
+        This is used by the ABI /emit endpoint to rebuild an envelope
+        from a JSON payload before signature verification.
+        """
+        env = cls(
+            schema_ver=data.get("schema_ver", "1.0"),
+            msg_id=data.get("msg_id"),
+            corr_id=data.get("corr_id"),
+            ts=data.get("ts", now_ts()),
+            producer=data.get("producer", ""),
+            subject=data.get("subject", ""),
+            key_id=data.get("key_id", ""),
+            sig=data.get("sig"),
+            sensitivity=data.get("sensitivity", DEFAULT_SENSITIVITY),
+            labels=data.get("labels", []),
+            payload_type=data.get("payload_type", "json"),
+            payload=data.get("payload"),
+            aad=data.get("aad"),
+        )
+        return env

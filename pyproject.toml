@@ -1,6 +1,6 @@
 [project]
 name = "aegnix-core"
-version = "0.1.0"
+version = "0.1.3"
 description = "Core primitives for the AEGNIX Swarm Framework"
 authors = [{ name = "Invictus Insights R&D" }]
 license = "MIT"
