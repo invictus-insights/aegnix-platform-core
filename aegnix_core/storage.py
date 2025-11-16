@@ -13,9 +13,11 @@ secure enclave storage in future releases.
 """
 
 from __future__ import annotations
-from typing import Optional, Dict, Any, Iterable, Tuple
+from typing import Optional, Dict, Any, List, Iterable, Tuple
 import json, sqlite3, os
 from dataclasses import dataclass
+from aegnix_core.capabilities import AECapability
+
 
 @dataclass
 class KeyRecord:
@@ -24,6 +26,7 @@ class KeyRecord:
     roles: str = ""
     status: str = "trusted"   # trusted|revoked|pending
     expires_at: Optional[str] = None
+
 
 class StorageProvider:
     # Interface
@@ -48,6 +51,8 @@ class SQLiteStorage:
 
     def _init(self) -> None:
         c = self.db.cursor()
+        cur = self.db.cursor()
+
         c.execute("""CREATE TABLE IF NOT EXISTS keyring(
             ae_id TEXT PRIMARY KEY,
             pubkey_b64 TEXT NOT NULL,
@@ -63,6 +68,22 @@ class SQLiteStorage:
         c.execute("""CREATE TABLE IF NOT EXISTS replay_guard(
             msg_id TEXT PRIMARY KEY
         )""")
+
+        # NEW: capabilities table
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ae_capabilities (
+              ae_id TEXT PRIMARY KEY,
+              publishes TEXT NOT NULL,
+              subscribes TEXT NOT NULL,
+              meta TEXT,
+              status TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+            """
+        )
+        # self.db.commit()
+
         self.db.commit()
 
     def upsert_key(self, rec: KeyRecord) -> None:
@@ -97,3 +118,66 @@ class SQLiteStorage:
     def mark_msg(self, msg_id: str) -> None:
         self.db.execute("INSERT OR IGNORE INTO replay_guard(msg_id) VALUES(?)", (msg_id,))
         self.db.commit()
+
+    # --- NEW Capability helpers ---
+
+    def upsert_capability(self, cap: AECapability) -> None:
+        cur = self.db.cursor()
+        cur.execute(
+            """
+            INSERT INTO ae_capabilities (ae_id, publishes, subscribes, meta, status, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(ae_id) DO UPDATE SET
+              publishes = excluded.publishes,
+              subscribes = excluded.subscribes,
+              meta = excluded.meta,
+              status = excluded.status,
+              updated_at = excluded.updated_at
+            """,
+            (
+                cap.ae_id,
+                json.dumps(cap.publishes),
+                json.dumps(cap.subscribes),
+                json.dumps(cap.meta),
+                cap.status,
+                cap.updated_at,
+            ),
+        )
+        self.db.commit()
+
+    def get_capability(self, ae_id: str) -> Optional[AECapability]:
+        cur = self.db.cursor()
+        cur.execute(
+            "SELECT ae_id, publishes, subscribes, meta, status, updated_at FROM ae_capabilities WHERE ae_id = ?",
+            (ae_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        ae_id, publishes, subscribes, meta, status, updated_at = row
+        return AECapability(
+            ae_id=ae_id,
+            publishes=json.loads(publishes),
+            subscribes=json.loads(subscribes),
+            meta=json.loads(meta) if meta else {},
+            status=status,
+            updated_at=updated_at,
+        )
+
+    def list_capabilities(self) -> List[AECapability]:
+        cur = self.db.cursor()
+        cur.execute("SELECT ae_id, publishes, subscribes, meta, status, updated_at FROM ae_capabilities")
+        caps = []
+        for row in cur.fetchall():
+            ae_id, publishes, subscribes, meta, status, updated_at = row
+            caps.append(
+                AECapability(
+                    ae_id=ae_id,
+                    publishes=json.loads(publishes),
+                    subscribes=json.loads(subscribes),
+                    meta=json.loads(meta) if meta else {},
+                    status=status,
+                    updated_at=updated_at,
+                )
+            )
+        return caps

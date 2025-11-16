@@ -42,22 +42,6 @@ class Envelope:
             d["sig"] = None
         return d
 
-    # def to_signing_bytes(self) -> bytes:
-    #     """
-    #     Deterministic byte sequence used for signing.
-    #
-    #     Includes only immutable content fields:
-    #     producer, subject, payload, labels, and sensitivity.
-    #     Excludes msg_id, ts, key_id, sig, schema_ver, and other metadata.
-    #     """
-    #     payload = {
-    #         "producer": self.producer,
-    #         "subject": self.subject,
-    #         "payload": self.payload,
-    #         "labels": self.labels,
-    #         "sensitivity": self.sensitivity,
-    #     }
-    #     return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
     def to_signing_bytes(self) -> bytes:
         import json

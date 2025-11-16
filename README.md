@@ -1,18 +1,16 @@
 # AEGNIX Core
 
-Lightweight, portable cryptographic and messaging primitives shared by all components of the **AEGNIX Swarm Framework**.
+The **AEGNIX Core** library provides the cryptographic, envelope, and storage primitives used across the entire **AEGNIX Swarm Framework**.
 
-## Overview
+It is the shared backbone that both the **ABI and AE SDKs** and **ABI Service** depend on, supplying:
 
-`aegnix_core` provides the foundational building blocks for secure, decentralized communication between **Atomic Experts (AEs)** and the **Agent Bridge Interface (ABI)**.
+* Deterministic, military‑grade Ed25519 + X25519 cryptography
+* Canonical message envelopes (`Envelope`) for signed, replay‑safe communication
+* Payload encryption (ECDH + HKDF + AES‑GCM)
+* Pluggable storage interfaces (SQLite by default)
+* Replay protection tools and keyring record structures
 
-It includes:
-
-* **Envelope schema** for structured, signed, replay-safe messages
-* **Crypto primitives** (Ed25519, X25519 + HKDF + AES-GCM) for signing and encryption
-* **Pluggable storage** interface (SQLite by default) for keyrings, audit logs, and replay guards
-
-All components are vendor-neutral, DoD-ready, and deployable inside air-gapped or cloud environments.
+Core contains **no networking, no JWT, no policy, and no admission logic** those live in the AE SDK and ABI Service. This separation keeps Core portable, auditable, and suitable for deployment in cloud, tactical edge, or air‑gapped defense systems.
 
 ---
 
@@ -26,49 +24,98 @@ Requires Python ≥ 3.10 and the `cryptography` library.
 
 ---
 
-## Quick Example
+## What AEGNIX Core Provides
+
+### ✔ Canonical Envelope Model
+
+`Envelope` defines the signed message schema used across the swarm:
+
+* deterministic ordering
+* canonical `to_signing_bytes()` representation
+* signature + key_id fields
+* replay‑safe IDs + timestamps
+* optional AAD for encrypted payload integrity
+
+This ensures every AE and ABI implementation signs and verifies data ***identically***.
+
+### ✔ Deterministic Crypto
+
+* **Ed25519** for signing
+* **X25519** for ECDH key exchange
+* **HKDF** for symmetric derivation
+* **AES‑GCM** for authenticated encryption
+
+These primitives are selected for:
+
+* cross‑platform reproducibility
+* NIST‑aligned security suitability
+* compatibility with tactical / embedded runtimes
+
+### ✔ Pluggable Storage
+
+`SQLiteStorage` implements the storage abstraction used by ABI Service for:
+
+* keyring entries
+* replay guards
+* audit index records
+
+The API is vendor‑neutral, allowing future adapters for:
+
+* PostgreSQL
+* GCP Spanner
+* AWS DynamoDB
+* Air‑gapped file‑based KV stores
+
+---
+
+## Quick Examples
+
+### Envelope Signing
 
 ```python
 from aegnix_core.envelope import Envelope
 from aegnix_core.crypto import ed25519_generate, sign_envelope, verify_envelope
 
-# Generate an AE identity keypair
 priv, pub = ed25519_generate()
 
-# Create a message
-env = Envelope(producer="fusion-ae", subject="fused.track", payload={"msg": "hello"})
+env = Envelope(
+    producer="fusion-ae",
+    subject="fusion.track",
+    payload={"msg": "hello"}
+)
 
-# Sign and verify
-env = sign_envelope(env, priv, key_id="fusion-ed25519-1")
+# Sign
+env = sign_envelope(env, priv, key_id="ae-key-1")
+
+# Verify
 print("Verified:", verify_envelope(env, pub))
 ```
 
----
-
-## Encryption Example
+### Encryption
 
 ```python
 from aegnix_core.crypto import (
-    x25519_generate, derive_key, encrypt_payload_json, decrypt_payload_json
+    x25519_generate,
+    derive_key,
+    encrypt_payload_json,
+    decrypt_payload_json
 )
 
-# Generate sender & receiver keys
 s_priv, s_pub = x25519_generate()
 r_priv, r_pub = x25519_generate()
 
-# Derive symmetric key via ECDH + HKDF
+# Symmetric key via ECDH + HKDF
 k_send = derive_key(s_priv, r_pub)
 k_recv = derive_key(r_priv, s_pub)
 
 payload = {"data": "classified"}
 enc = encrypt_payload_json(payload, k_send, aad_fields={"subject": "demo"})
 dec = decrypt_payload_json(enc, k_recv, aad_fields={"subject": "demo"})
+
 assert dec == payload
 ```
 
----
-
-## Storage Interface
+### Storage
 
 ```python
 from aegnix_core.storage import SQLiteStorage, KeyRecord
@@ -80,15 +127,47 @@ print(store.get_key("fusion-ae"))
 
 ---
 
+## Architectural Context
+
+AEGNIX Core sits at the center of the ecosystem:
+
+```plantuml
+@startuml
+actor AE
+actor ABI
+
+rectangle "AEGNIX AE SDK" as AE_SDK
+rectangle "AEGNIX ABI Service" as ABI_SVC
+rectangle "AEGNIX Core" as CORE
+
+AE --> AE_SDK : sign envelopes
+ABI_SVC --> CORE : verify signatures
+AE_SDK --> CORE : crypto, envelope, storage utils
+CORE --> AE_SDK : deterministic primitives
+CORE --> ABI_SVC : deterministic primitives
+ABI_SVC --> AE : verified JWT (outside Core)
+
+@enduml
+```
+
+Core ensures **every component uses the same deterministic cryptographic and envelope foundations**, enabling:
+
+* auditability
+* cross‑language expansion
+* secure multi‑agent coordination
+* consistent signing across transports (HTTP, Kafka, Pub/Sub, etc.)
+
+---
+
 ## Design Goals
 
-| Goal                     | Description                                           |
-| ------------------------ | ----------------------------------------------------- |
-| **Zero Vendor Lock**     | Runs in GCP, on bare metal, or in classified enclaves |
-| **Deterministic Crypto** | Stable Ed25519 / X25519 primitives                    |
-| **Modular Storage**      | Default SQLite + pluggable adapters                   |
-| **Replay Protection**    | Built-in message tracking                             |
-| **Audit Ready**          | Schema-controlled envelope signatures                 |
+| Goal                     | Description                                   |
+| ------------------------ | --------------------------------------------- |
+| **Zero Vendor Lock**     | Runs in GCP, bare metal, containers, or SCIFs |
+| **Deterministic Crypto** | Stable Ed25519 / X25519 primitives            |
+| **Modular Storage**      | SQLite default + pluggable adapters           |
+| **Replay Protection**    | Message ID + replay guard tooling             |
+| **Audit Ready**          | Envelope signature schema for non‑repudiation |
 
 ---
 
@@ -98,10 +177,29 @@ print(store.get_key("fusion-ae"))
 pytest -v
 ```
 
-All core functionality (signing, encryption, storage) is covered by tests in `/tests`.
+Tests cover:
+
+* Signing
+* Verification
+* Encryption
+* Decryption
+* Storage
+* Replay protection
+
+---
+
+## Used By
+
+* **AEGNIX ABI Service** → verification, keyring storage, encrypted payload handling
+* **AEGNIX AE SDK** → signing, encryption, canonical envelope construction
+* **AEGNIX ABI SDK** → dual-crypto admission handshake, trust-state management, Ed25519 verification, signed audit-event construction
+* **Future UIX Runtime** → introspection + confidence scoring
 
 ---
 
 ## License
 
-MIT © Invictus Insights LLC R&D
+**Repository:** `github.com/invictus-insights/aegnix_core`
+**Author:** Invictus Insights R&D
+**Version:** 0.3.7 (Phase 3F Verified Emission)
+**License:** MIT © Invictus Insights LLC R&D
