@@ -1,26 +1,26 @@
 Metadata-Version: 2.4
 Name: aegnix-core
-Version: 0.1.5
+Version: 0.1.22
 Summary: Core primitives for the AEGNIX Swarm Framework
 Author: Invictus Insights R&D
 License-Expression: MIT
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 Requires-Dist: cryptography>=42.0.0
+Requires-Dist: requests>=2.31.0
 
 # AEGNIX Core
 
-The **AEGNIX Core** library provides the cryptographic, envelope, and storage primitives used across the entire **AEGNIX Swarm Framework**.
+The **AEGNIX Core** library provides the deterministic cryptographic, envelope, and storage primitives used across the entire **AEGNIX Swarm Framework**.
 
-It is the shared backbone that both the **ABI and AE SDKs** and **ABI Service** depend on, supplying:
+It is the shared backbone that powers:
 
-* Deterministic, military‑grade Ed25519 + X25519 cryptography
-* Canonical message envelopes (`Envelope`) for signed, replay‑safe communication
-* Payload encryption (ECDH + HKDF + AES‑GCM)
-* Pluggable storage interfaces (SQLite by default)
-* Replay protection tools and keyring record structures
+* **AE SDK** (Atomic Expert local runtime)
+* **ABI Service** (Swarm admission, JWT verification, policy enforcement)
+* **ABI SDK** (key enrollment + signed audit events)
 
-Core contains **no networking, no JWT, no policy, and no admission logic** those live in the AE SDK and ABI Service. This separation keeps Core portable, auditable, and suitable for deployment in cloud, tactical edge, or air‑gapped defense systems.
+Core contains **zero networking, zero JWT, zero policy**, and **no AE-specific logic**.
+This keeps it portable, auditable, and suitable for cloud, tactical-edge, or air‑gapped defense deployments.
 
 ---
 
@@ -30,7 +30,7 @@ Core contains **no networking, no JWT, no policy, and no admission logic** those
 pip install -e .
 ```
 
-Requires Python ≥ 3.10 and the `cryptography` library.
+Requires Python ≥ 3.10.
 
 ---
 
@@ -46,34 +46,42 @@ Requires Python ≥ 3.10 and the `cryptography` library.
 * replay‑safe IDs + timestamps
 * optional AAD for encrypted payload integrity
 
-This ensures every AE and ABI implementation signs and verifies data ***identically***.
+Every AE and ABI implementation signs and verifies envelopes **identically**, ensuring non‑repudiation and cross‑runtime consistency.
 
-### ✔ Deterministic Crypto
+---
 
-* **Ed25519** for signing
+### ✔ Deterministic Crypto Primitives
+
+AEGNIX Core implements:
+
+* **Ed25519** for deterministic signatures
 * **X25519** for ECDH key exchange
-* **HKDF** for symmetric derivation
+* **HKDF** for symmetric key derivation
 * **AES‑GCM** for authenticated encryption
 
-These primitives are selected for:
+Selected for:
 
 * cross‑platform reproducibility
-* NIST‑aligned security suitability
-* compatibility with tactical / embedded runtimes
+* low‑overhead edge compatibility
+* alignment with NIST/DoD crypto guidelines
 
-### ✔ Pluggable Storage
+---
 
-`SQLiteStorage` implements the storage abstraction used by ABI Service for:
+### ✔ Pluggable Storage (SQLite Default)
 
-* keyring entries
-* replay guards
-* audit index records
+`SQLiteStorage` provides:
 
-The API is vendor‑neutral, allowing future adapters for:
+* AE **keyring**
+* **replay‑guard** records
+* **audit log index**
+* **capability table** (Phase 3G)
+
+It acts as the ABI Service's persistent state, while remaining vendor‑neutral for future adapters:
 
 * PostgreSQL
-* GCP Spanner
+* Cockroach
 * AWS DynamoDB
+* GCP Spanner
 * Air‑gapped file‑based KV stores
 
 ---
@@ -94,10 +102,7 @@ env = Envelope(
     payload={"msg": "hello"}
 )
 
-# Sign
 env = sign_envelope(env, priv, key_id="ae-key-1")
-
-# Verify
 print("Verified:", verify_envelope(env, pub))
 ```
 
@@ -108,21 +113,18 @@ from aegnix_core.crypto import (
     x25519_generate,
     derive_key,
     encrypt_payload_json,
-    decrypt_payload_json
+    decrypt_payload_json,
 )
 
 s_priv, s_pub = x25519_generate()
 r_priv, r_pub = x25519_generate()
 
-# Symmetric key via ECDH + HKDF
 k_send = derive_key(s_priv, r_pub)
 k_recv = derive_key(r_priv, s_pub)
 
 payload = {"data": "classified"}
 enc = encrypt_payload_json(payload, k_send, aad_fields={"subject": "demo"})
 dec = decrypt_payload_json(enc, k_recv, aad_fields={"subject": "demo"})
-
-assert dec == payload
 ```
 
 ### Storage
@@ -139,7 +141,7 @@ print(store.get_key("fusion-ae"))
 
 ## Architectural Context
 
-AEGNIX Core sits at the center of the ecosystem:
+AEGNIX Core provides the shared crypto + envelope foundation for the entire swarm.
 
 ```plantuml
 @startuml
@@ -150,34 +152,26 @@ rectangle "AEGNIX AE SDK" as AE_SDK
 rectangle "AEGNIX ABI Service" as ABI_SVC
 rectangle "AEGNIX Core" as CORE
 
-AE --> AE_SDK : sign envelopes
+AE --> AE_SDK : sign + encrypt
 ABI_SVC --> CORE : verify signatures
-AE_SDK --> CORE : crypto, envelope, storage utils
+AE_SDK --> CORE : crypto + envelope APIs
 CORE --> AE_SDK : deterministic primitives
 CORE --> ABI_SVC : deterministic primitives
-ABI_SVC --> AE : verified JWT (outside Core)
-
+ABI_SVC --> AE : JWT trust (outside Core)
 @enduml
 ```
-
-Core ensures **every component uses the same deterministic cryptographic and envelope foundations**, enabling:
-
-* auditability
-* cross‑language expansion
-* secure multi‑agent coordination
-* consistent signing across transports (HTTP, Kafka, Pub/Sub, etc.)
 
 ---
 
 ## Design Goals
 
-| Goal                     | Description                                   |
-| ------------------------ | --------------------------------------------- |
-| **Zero Vendor Lock**     | Runs in GCP, bare metal, containers, or SCIFs |
-| **Deterministic Crypto** | Stable Ed25519 / X25519 primitives            |
-| **Modular Storage**      | SQLite default + pluggable adapters           |
-| **Replay Protection**    | Message ID + replay guard tooling             |
-| **Audit Ready**          | Envelope signature schema for non‑repudiation |
+| Goal                     | Description                                 |
+| ------------------------ | ------------------------------------------- |
+| **Zero Vendor Lock**     | Runs in cloud, bare metal, containers, SCIF |
+| **Deterministic Crypto** | Stable Ed25519 / X25519 primitives          |
+| **Modular Storage**      | SQLite default + future pluggable adapters  |
+| **Replay Protection**    | Msg‑ID guard inside storage layer           |
+| **Audit Ready**          | Canonical envelopes for non‑repudiation     |
 
 ---
 
@@ -189,27 +183,25 @@ pytest -v
 
 Tests cover:
 
-* Signing
-* Verification
-* Encryption
-* Decryption
-* Storage
-* Replay protection
+* Signing / Verification
+* Encryption / Decryption
+* Storage behavior
+* Replay‑guard
 
 ---
 
 ## Used By
 
-* **AEGNIX ABI Service** → verification, keyring storage, encrypted payload handling
-* **AEGNIX AE SDK** → signing, encryption, canonical envelope construction
-* **AEGNIX ABI SDK** → dual-crypto admission handshake, trust-state management, Ed25519 verification, signed audit-event construction
-* **Future UIX Runtime** → introspection + confidence scoring
+* **AEGNIX ABI Service** → verify signatures, maintain keyring, enforce replay‑guard
+* **AEGNIX AE SDK** → envelope construction, signing, encryption
+* **AEGNIX ABI SDK** → admission handshake, key management, signed audit events
+* **Future UIX Runtime** → introspection + confidence‑score pipelines
 
 ---
 
 ## License
 
-**Repository:** `github.com/invictus-insights/aegnix_core`
-**Author:** Invictus Insights R&D
-**Version:** 0.3.7 (Phase 3F Verified Emission)
-**License:** MIT © Invictus Insights LLC R&D
+Repository: `github.com/invictus-insights/aegnix_core`
+Author: Invictus Insights R&D
+Version: **0.3.8 (Phase 3G — Finalized Role Merge & Capability Sync)**
+License: MIT © Invictus Insights LLC

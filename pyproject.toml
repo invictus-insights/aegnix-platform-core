@@ -1,19 +1,25 @@
 [project]
 name = "aegnix-core"
-version = "0.1.5"
+version = "0.1.22"
 description = "Core primitives for the AEGNIX Swarm Framework"
 authors = [{ name = "Invictus Insights R&D" }]
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["cryptography>=42.0.0"]
+dependencies = ["cryptography>=42.0.0",
+
+    "requests>=2.31.0",
+]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["aegnix_core"]
+packages = [
+    "aegnix_core",
+    "aegnix_core.transport"
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"
