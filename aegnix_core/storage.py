@@ -26,6 +26,7 @@ class KeyRecord:
     roles: str = ""
     status: str = "trusted"   # trusted|revoked|pending
     expires_at: Optional[str] = None
+    pub_key_fpr: str = ""
 
 
 class StorageProvider:
@@ -48,6 +49,32 @@ class SQLiteStorage:
 
         self._init()
 
+    def execute(self, sql: str, params: tuple = None):
+        if params:
+            return self.db.execute(sql, params)
+        return self.db.execute(sql)
+
+    def fetch_one(self, sql: str, params: tuple = None):
+        cur = self.execute(sql, params)
+        row = cur.fetchone()
+        if row is None:
+            return None
+        # Turn sqlite3.Row into dict
+        if isinstance(row, sqlite3.Row):
+            return dict(row)
+        # Otherwise map tuple to column names
+        columns = [col[0] for col in cur.description]
+        return {columns[i]: row[i] for i in range(len(columns))}
+
+    def insert(self, table: str, record: dict):
+        keys = ", ".join(record.keys())
+        placeholders = ", ".join(["?"] * len(record))
+        values = tuple(record.values())
+        self.db.execute(
+            f"INSERT INTO {table} ({keys}) VALUES ({placeholders})",
+            values
+        )
+        self.db.commit()
 
     def _init(self) -> None:
         c = self.db.cursor()
@@ -58,7 +85,8 @@ class SQLiteStorage:
             pubkey_b64 TEXT NOT NULL,
             roles TEXT,
             status TEXT,
-            expires_at TEXT
+            expires_at TEXT,
+            pub_key_fpr TEXT
         )""")
         c.execute("""CREATE TABLE IF NOT EXISTS audit(
             ts TEXT,
@@ -88,15 +116,15 @@ class SQLiteStorage:
 
     def upsert_key(self, rec: KeyRecord) -> None:
         self.db.execute(
-            "INSERT INTO keyring(ae_id,pubkey_b64,roles,status,expires_at) VALUES(?,?,?,?,?) "
+            "INSERT INTO keyring(ae_id,pubkey_b64,roles,status,expires_at,pub_key_fpr) VALUES(?,?,?,?,?,?) "
             "ON CONFLICT(ae_id) DO UPDATE SET pubkey_b64=excluded.pubkey_b64, roles=excluded.roles, "
-            "status=excluded.status, expires_at=excluded.expires_at",
-            (rec.ae_id, rec.pubkey_b64, rec.roles, rec.status, rec.expires_at)
+            "status=excluded.status, expires_at=excluded.expires_at, pub_key_fpr=excluded.pub_key_fpr",
+            (rec.ae_id, rec.pubkey_b64, rec.roles, rec.status, rec.expires_at, rec.pub_key_fpr)
         )
         self.db.commit()
 
     def get_key(self, ae_id: str) -> Optional[KeyRecord]:
-        cur = self.db.execute("SELECT ae_id,pubkey_b64,roles,status,expires_at FROM keyring WHERE ae_id=?", (ae_id,))
+        cur = self.db.execute("SELECT ae_id,pubkey_b64,roles,status,expires_at,pub_key_fpr FROM keyring WHERE ae_id=?", (ae_id,))
         row = cur.fetchone()
         if not row: return None
         return KeyRecord(*row)

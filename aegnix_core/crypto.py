@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-import os
+import os, hashlib, base64
 from .utils import b64e, b64d
 from .envelope import Envelope
 
@@ -87,3 +87,20 @@ def decrypt_payload_json(enc: Dict[str, str], key: bytes, aad_fields: Optional[D
         aad = json.dumps(aad_fields, separators=(",", ":"), sort_keys=True).encode("utf-8")
     pt = aead_decrypt(key, b64d(enc["nonce"]), b64d(enc["ciphertext"]), aad=aad)
     return json.loads(pt.decode("utf-8"))
+
+def compute_pubkey_fingerprint(pubkey_b64: str) -> str:
+    """
+    Compute a stable fingerprint for an Ed25519 public key.
+
+    - Input: base64-encoded Ed25519 public key
+    - Output: hex-encoded SHA256 hash (truncated to 32 chars for readability)
+
+    The fingerprint is used for session binding, identity tracking,
+    and cross-AE trust assertions.
+    """
+
+    raw = b64d(pubkey_b64)
+    digest = hashlib.sha256(raw).hexdigest()
+
+    # Optional: shorten to 16 bytes = 32 hex chars to keep DB smaller
+    return digest[:32]

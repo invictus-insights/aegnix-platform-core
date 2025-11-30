@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-import os
+import os, hashlib
 from .utils import b64e, b64d
 from .envelope import Envelope
 
@@ -87,3 +87,9 @@ def decrypt_payload_json(enc: Dict[str, str], key: bytes, aad_fields: Optional[D
         aad = json.dumps(aad_fields, separators=(",", ":"), sort_keys=True).encode("utf-8")
     pt = aead_decrypt(key, b64d(enc["nonce"]), b64d(enc["ciphertext"]), aad=aad)
     return json.loads(pt.decode("utf-8"))
+
+def compute_fingerprint(pubkey_b64: str) -> str:
+    """
+    Session fingerprint for AE session identity
+    """
+    return hashlib.sha256(pubkey_b64.encode("utf8")).hexdigest()[:16]
