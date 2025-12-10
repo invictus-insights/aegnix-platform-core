@@ -15,7 +15,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from .constants import SCHEMA_VERSION, DEFAULT_SENSITIVITY
-from .utils import canonical_json, new_id, now_ts
+from .utils import new_id, now_ts
 import json
 
 

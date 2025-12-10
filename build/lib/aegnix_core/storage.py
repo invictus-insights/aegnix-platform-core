@@ -116,10 +116,10 @@ class SQLiteStorage:
 
     def upsert_key(self, rec: KeyRecord) -> None:
         self.db.execute(
-            "INSERT INTO keyring(ae_id,pubkey_b64,roles,status,expires_at) VALUES(?,?,?,?,?) "
+            "INSERT INTO keyring(ae_id,pubkey_b64,roles,status,expires_at,pub_key_fpr) VALUES(?,?,?,?,?,?) "
             "ON CONFLICT(ae_id) DO UPDATE SET pubkey_b64=excluded.pubkey_b64, roles=excluded.roles, "
             "status=excluded.status, expires_at=excluded.expires_at, pub_key_fpr=excluded.pub_key_fpr",
-            (rec.ae_id, rec.pubkey_b64, rec.roles, rec.status, rec.expires_at,rec.pub_key_fpr)
+            (rec.ae_id, rec.pubkey_b64, rec.roles, rec.status, rec.expires_at, rec.pub_key_fpr)
         )
         self.db.commit()
 
