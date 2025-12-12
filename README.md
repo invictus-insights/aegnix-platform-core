@@ -194,3 +194,5 @@ Repository: `github.com/invictus-insights/aegnix_core`
 Author: Invictus Insights R&D
 Version: **0.3.8 (Phase 3G — Finalized Role Merge & Capability Sync)**
 License: MIT © Invictus Insights LLC
+
+--
