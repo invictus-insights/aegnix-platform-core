@@ -188,6 +188,11 @@ Tests cover:
 
 ---
 
+## Deployment of wheel
+```bash
+ pip wheel . -w dist
+
+```
 ## License
 
 Repository: `github.com/invictus-insights/aegnix_core`

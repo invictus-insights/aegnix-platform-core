@@ -1,45 +1,12 @@
-"""
-aegnix_core.storage
--------------------
-Pluggable storage interface for the ABI and replay guard systems.
-
-Default implementation: SQLiteStorage
-- Persists keyring entries (AE IDs + public keys)
-- Maintains audit logs for cryptographic events
-- Implements replay protection via msg_id tracking
-
-The interface is intentionally minimal to support adapters for Postgres, Vault, or
-secure enclave storage in future releases.
-"""
-
 from __future__ import annotations
-from typing import Optional, Dict, Any, List, Iterable, Tuple
+from typing import Optional, Dict, Any, List
 import json, sqlite3, os
-from dataclasses import dataclass
 from aegnix_core.capabilities import AECapability
+from aegnix_core.storage.provider import StorageProvider
+from aegnix_core.storage.models import KeyRecord
 
 
-@dataclass
-class KeyRecord:
-    ae_id: str
-    pubkey_b64: str
-    roles: str = ""
-    status: str = "trusted"   # trusted|revoked|pending
-    expires_at: Optional[str] = None
-    pub_key_fpr: str = ""
-
-
-class StorageProvider:
-    # Interface
-    def upsert_key(self, rec: KeyRecord) -> None: ...
-    def get_key(self, ae_id: str) -> Optional[KeyRecord]: ...
-    def revoke_key(self, ae_id: str) -> None: ...
-    def log_event(self, event_type: str, payload: Dict[str, Any]) -> None: ...
-    def seen_msg(self, msg_id: str) -> bool: ...
-    def mark_msg(self, msg_id: str) -> None: ...
-
-
-class SQLiteStorage:
+class SQLiteStorage(StorageProvider):
     def __init__(self, path="db/abi_state.db"):
         # If no directory, default to current working directory
         dir_path = os.path.dirname(path) or "."
@@ -134,7 +101,8 @@ class SQLiteStorage:
         self.db.commit()
 
     def log_event(self, event_type: str, payload: Dict[str, Any]) -> None:
-        from .utils import now_ts
+        from aegnix_core.utils import now_ts
+
         self.db.execute("INSERT INTO audit(ts,event_type,payload) VALUES(?,?,?)",
                         (now_ts(), event_type, json.dumps(payload, separators=(",", ":"), sort_keys=True)))
         self.db.commit()
@@ -209,3 +177,37 @@ class SQLiteStorage:
                 )
             )
         return caps
+
+    def fetch_by_fingerprint(self, fpr: str):
+        cur = self.db.execute(
+            "SELECT ae_id, pubkey_b64, roles, status, expires_at, pub_key_fpr "
+            "FROM keyring WHERE pub_key_fpr = ?",
+            (fpr,)
+        )
+        row = cur.fetchone()
+        return KeyRecord(*row) if row else None
+
+    def fetch_by_pubkey(self, pubkey_b64: str):
+        cur = self.db.execute(
+            "SELECT ae_id, pubkey_b64, roles, status, expires_at, pub_key_fpr "
+            "FROM keyring WHERE pubkey_b64 = ?",
+            (pubkey_b64,)
+        )
+        row = cur.fetchone()
+        return KeyRecord(*row) if row else None
+
+    def list_keys(self):
+        cur = self.db.execute(
+            "SELECT ae_id, pubkey_b64, roles, status, expires_at "
+            "FROM keyring"
+        )
+        return [
+            dict(zip(["ae_id", "pubkey_b64", "roles", "status", "expires_at"], r))
+            for r in cur.fetchall()
+        ]
+
+    def flush(self):
+        self.db.commit()
+
+    def close(self):
+        self.db.close()

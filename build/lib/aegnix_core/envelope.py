@@ -68,6 +68,9 @@ class Envelope:
         """Full JSON serialization (including signature)."""
         return json.dumps(asdict(self), sort_keys=True)
 
+    def to_json_bytes(self) -> bytes:
+        return self.to_json().encode("utf-8")
+
     @staticmethod
     def make(producer, subject, payload, labels, key_id, sensitivity="UNCLASS"):
         """Factory to create a properly structured envelope."""

@@ -1,1 +1,3 @@
 aegnix_core
+build
+dist

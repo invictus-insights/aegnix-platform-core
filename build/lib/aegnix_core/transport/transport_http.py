@@ -1,17 +1,20 @@
 # aegnix_core/transport/transport_http.py
-import requests, json, threading, os
+import requests, json, threading
 from aegnix_core.logger import get_logger
+from aegnix_core.transport.transport_base import BaseTransport
 
 log = get_logger("AE.Transport.HTTP")
 
-class HTTPAdapter:
+class HTTPAdapter(BaseTransport):
     """
-    HTTP transport adapter for posting envelopes to the ABI /emit endpoint.
+    HTTP client transport adapter for posting envelopes to the ABI /emit endpoint.
 
-    Features:
-    - Supports Bearer JWT authentication via AE_GRANT environment variable.
-    - Supports SSE-based subscription for live topic streaming (Phase 3E).
+    NOTE (Phase 8):
+    This adapter represents *client transport* (AE → ABI),
+    not mesh transport (Kafka / PubSub).
     """
+
+    name = "http"
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
         self.handlers = {}
@@ -25,30 +28,42 @@ class HTTPAdapter:
     # ------------------------------------------------------------------
     # Outbound publishing
     # ------------------------------------------------------------------
-    def publish(self, subject: str, message: dict):
+    def publish(self, subject: str, payload, headers=None, key=None):
         """
         POST a signed envelope to the ABI /emit endpoint.
-        Adds an Authorization header automatically if AE_GRANT is set.
+
+        Phase 8 behavior:
+        - Accepts bytes or dict payloads
+        - Bytes are decoded to JSON here (ABI expects JSON)
+        - Serialization responsibility remains outside the transport
         """
         url = f"{self.base_url}/emit"
-        headers = {"Content-Type": "application/json"}
+        req_headers = {"Content-Type": "application/json"}
 
-        # Bearer grant (session token from AEClient.register_with_abi)
-        # grant = os.getenv("AE_GRANT")
-        # if grant:
-        #     headers["Authorization"] = f"Bearer {grant}"
         if self._grant:
-            headers["Authorization"] = f"Bearer {self._grant}"
+            req_headers["Authorization"] = f"Bearer {self._grant}"
 
-        log.debug(f"[HTTP PUB] → {url} | subject={subject}")
-        log.info(f"[HTTP PUB subject] → {url} | subject={subject}")
-        log.info(f"[HTTP PUB head] → {url} | headers={headers}")
-        log.info(f"[HTTP PUB msg] → {url} | json_message={message}")
+        # ---- Phase 8.1 bridge: bytes → dict -----------------
+        if isinstance(payload, (bytes, bytearray)):
+            try:
+                message = json.loads(payload.decode("utf-8"))
+            except Exception as e:
+                log.error(f"[HTTP PUB] Invalid JSON payload: {e}")
+                return {"error": "invalid_payload"}
+        else:
+            message = payload
+        # -----------------------------------------------------
+
+        log.info(f"[HTTP PUB] → {url} | subject={subject}")
+
         try:
-            res = requests.post(url, json=message, headers=headers, timeout=5)
-            log.info(f"[HTTP PUB res] {res.status_code} {res.reason}")
+            res = requests.post(
+                url,
+                json=message,
+                headers=req_headers,
+                timeout=5,
+            )
             if res.ok:
-                log.info(f"[HTTP PUB] {res.status_code} {res.reason}")
                 return res.json()
             else:
                 log.error(f"[HTTP PUB] {res.status_code}: {res.text}")
