@@ -6,13 +6,27 @@ from aegnix_core.transport.transport_gcp_pubsub import GcpPubSubAdapter
 from aegnix_core.transport.transport_kafka import KafkaAdapter
 
 
-def transport_factory():
-    """Return best-fit transport adapter based on environment or config."""
-    mode = os.getenv("AE_TRANSPORT", "local").lower()
+def transport_factory(role: str = "mesh"):
+    """
+    role:
+      - "mesh"   → ABI egress (Kafka / HTTP / PubSub)
+      - "client" → AE → ABI communication
+    """
+    if role == "mesh":
+        mode = os.getenv("ABI_MESH_TRANSPORT", "http").lower()
+    else:
+        mode = os.getenv("AE_TRANSPORT", "http").lower()
+
     if mode == "gcp":
         return GcpPubSubAdapter()
+
+    if mode == "kafka":
+        return KafkaAdapter(
+            brokers=os.getenv("KAFKA_BROKERS", "localhost:9092"),
+            enabled=os.getenv("KAFKA_ENABLED", "1") == "1",
+        )
+
     if mode == "http":
         return HTTPAdapter(os.getenv("ABI_URL", "http://localhost:8080"))
-    if mode == "kafka":
-        return KafkaAdapter(mock=os.getenv("KAFKA_MOCK", "1") == "1")
+
     return LocalAdapter()
